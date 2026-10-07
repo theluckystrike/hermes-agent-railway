@@ -92,14 +92,15 @@ On boot, the official image runs Hermes config migrations against `/opt/data/con
 
 ## Smoke test
 
-`scripts/smoke.sh` runs the pinned image with the template variables and a named volume, then checks six things.
+`scripts/smoke.sh` runs the pinned image with the template variables and a named volume, then makes 16 checks in seven groups.
 
 1. `GET /health` returns 200 with `{"status": "ok"}`.
 2. `/v1/models` and `/api/sessions` return 401 without a key and with a wrong key.
 3. The preset landed in `config.yaml`.
 4. A session created through `POST /api/sessions` is still there after `docker restart`.
 5. The same session is still there in a fresh container on the same volume, which is what a Railway redeploy does.
-6. A bot token without an allowlist stops the container.
+6. Switching `PROVIDER` to `anthropic` rewrites the preset and keeps the session.
+7. A bot token without an allowlist stops the container.
 
 ```sh
 ./scripts/smoke.sh                 # entrypoint as PID 1, the normal s6 path
