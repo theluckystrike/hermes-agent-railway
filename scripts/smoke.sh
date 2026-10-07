@@ -36,7 +36,7 @@ bad()  { fail=$((fail + 1)); printf 'FAIL  %s\n' "$*"; }
 info() { printf '....  %s\n' "$*"; }
 
 cleanup() {
-    docker rm -f "$NAME" "${NAME}-tg" >/dev/null 2>&1 || true
+    docker rm -fv "$NAME" "${NAME}-tg" >/dev/null 2>&1 || true
     docker volume rm -f "$VOLUME" >/dev/null 2>&1 || true
 }
 trap cleanup EXIT
@@ -134,7 +134,7 @@ c="$(code "${auth[@]}" "${BASE}/api/sessions/${sid}")"
 [ "$c" = "200" ] && ok "session $sid readable after docker restart" || bad "session $sid returned $c after docker restart"
 
 # ---- 5. session survives a new container on the same volume ---------------
-docker rm -f "$NAME" >/dev/null
+docker rm -fv "$NAME" >/dev/null
 start
 if wait_health; then ok "fresh container on the same volume is healthy"; else bad "fresh container not healthy"; exit 1; fi
 body="$(curl -s "${auth[@]}" "${BASE}/api/sessions/${sid}")"
@@ -145,7 +145,7 @@ else
 fi
 
 # ---- 6. switching the preset on the same volume ----------------------------
-docker rm -f "$NAME" >/dev/null
+docker rm -fv "$NAME" >/dev/null
 start -e PROVIDER=anthropic -e ANTHROPIC_API_KEY=sk-ant-smoke-placeholder
 if wait_health; then ok "container with PROVIDER=anthropic is healthy"; else bad "PROVIDER=anthropic container not healthy"; exit 1; fi
 got="$(model_cfg)"
