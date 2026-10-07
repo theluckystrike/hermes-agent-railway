@@ -1,6 +1,6 @@
 # Hermes Agent on Railway
 
-A Railway template for [Hermes Agent](https://github.com/NousResearch/hermes-agent) by Nous Research. It runs the official `nousresearch/hermes-agent:v2026.9.24` image, pinned by digest, with persistent state, a real healthcheck, an authenticated API and a mandatory Telegram allowlist.
+A Railway template for [Hermes Agent](https://github.com/NousResearch/hermes-agent) by Nous Research. It runs the official `nousresearch/hermes-agent:v2026.9.21` image, pinned by digest, with persistent state, a real healthcheck, an authenticated API and a mandatory Telegram allowlist.
 
 [![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/deploy/TEMPLATE_CODE?referralCode=&utm_medium=integration&utm_source=button&utm_campaign=hermes-agent-railway)
 
@@ -10,7 +10,7 @@ This template is community maintained. It is not an official Nous Research or Ra
 
 | Item | Value |
 |---|---|
-| Image | `nousresearch/hermes-agent:v2026.9.24` pinned by multi-arch digest in `Dockerfile` |
+| Image | `nousresearch/hermes-agent:v2026.9.21` pinned by multi-arch digest in `Dockerfile` |
 | State | Railway volume on `/opt/data`, the image's own `HERMES_HOME` (config, `.env`, sessions, memories, skills, cron, logs) |
 | Healthcheck | `GET /health` on the API server, 300 s timeout |
 | Restart policy | `ON_FAILURE`, 10 retries |
