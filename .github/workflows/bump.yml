@@ -1,0 +1,87 @@
+name: bump
+
+# Daily check for a new NousResearch/hermes-agent release. When one exists and
+# its image is on Docker Hub, push a bump branch, smoke-test it, open a PR and
+# merge it on green. A merge to main makes Railway notify every deployer.
+
+on:
+  schedule:
+    - cron: "17 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: bump
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.latest.outputs.tag }}
+      branch: ${{ steps.latest.outputs.branch }}
+      changed: ${{ steps.latest.outputs.changed }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Find latest release and image digest
+        id: latest
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag="$(gh api repos/NousResearch/hermes-agent/releases/latest --jq .tag_name)"
+          current="$(sed -nE 's#^FROM nousresearch/hermes-agent:([^@]+)@.*#\1#p' Dockerfile)"
+          echo "latest=$tag current=$current"
+          branch="bump/hermes-$tag"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "branch=$branch" >> "$GITHUB_OUTPUT"
+          if [ "$tag" = "$current" ]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          if gh pr list --state all --head "$branch" --json number --jq 'length' | grep -qv '^0$'; then
+            echo "PR for $branch already exists"; echo "changed=false" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          digest="$(curl -fsS "https://hub.docker.com/v2/repositories/nousresearch/hermes-agent/tags/$tag" | jq -r '.digest // empty')"
+          if [ -z "$digest" ]; then
+            echo "image tag $tag is not on Docker Hub yet; retry tomorrow"; echo "changed=false" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          sed -i -E "s#^FROM nousresearch/hermes-agent:[^ ]+#FROM nousresearch/hermes-agent:${tag}@${digest}#" Dockerfile
+          sed -i -E "s#nousresearch/hermes-agent:v[0-9.]+#nousresearch/hermes-agent:${tag}#g" README.md
+          git config user.name "github-actions[bot]"
+          git config user.email "41898283+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$branch"
+          git commit -am "Bump hermes-agent to $tag"
+          git push -f origin "$branch"
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+
+  smoke:
+    needs: check
+    if: needs.check.outputs.changed == 'true'
+    uses: ./.github/workflows/smoke.yml
+    with:
+      ref: ${{ needs.check.outputs.branch }}
+
+  pr:
+    needs: [check, smoke]
+    if: needs.check.outputs.changed == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Open and merge the bump PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.check.outputs.tag }}
+          BRANCH: ${{ needs.check.outputs.branch }}
+          AUTO_MERGE: ${{ vars.AUTO_MERGE }}
+        run: |
+          set -euo pipefail
+          body="$(printf 'Pins nousresearch/hermes-agent to %s.\n\nRelease notes at https://github.com/NousResearch/hermes-agent/releases/tag/%s\n\nThe smoke job passed on this branch in run %s/%s/actions/runs/%s (health 200, unauthenticated API 401, session kept across restart and redeploy, Telegram allowlist guard).\n' \
+            "$TAG" "$TAG" "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID")"
+          url="$(gh pr create --base main --head "$BRANCH" --title "Bump hermes-agent to $TAG" --body "$body")"
+          echo "$url"
+          if [ "${AUTO_MERGE:-true}" = "true" ]; then
+            gh pr merge "$url" --squash --delete-branch
+          fi

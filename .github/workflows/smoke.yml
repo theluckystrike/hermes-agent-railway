@@ -1,0 +1,44 @@
+name: smoke
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+  workflow_call:
+    inputs:
+      ref:
+        description: Git ref to test
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        # 0 = entrypoint is PID 1 (s6 supervision), 1 = docker run --init (s6 fallback path)
+        init: ["0", "1"]
+    name: smoke (init=${{ matrix.init }})
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+      - name: Run smoke test
+        env:
+          SMOKE_INIT: ${{ matrix.init }}
+        run: ./scripts/smoke.sh 2>&1 | tee smoke-output.txt
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo '### Smoke (init=${{ matrix.init }})'
+            echo '```'
+            cat smoke-output.txt 2>/dev/null || echo 'no output'
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

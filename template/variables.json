@@ -1,0 +1,20 @@
+{
+  "service": "hermes-agent",
+  "source": "https://github.com/theluckystrike/hermes-agent-railway",
+  "volume": { "mountPath": "/opt/data" },
+  "domain": { "targetPort": 8642 },
+  "variables": {
+    "PROVIDER": { "default": "openrouter", "optional": false, "description": "Model provider preset. One of openrouter, anthropic, openai, nous, custom." },
+    "MODEL": { "default": "", "optional": true, "description": "Model ID. Empty picks the preset default (anthropic/claude-haiku-4.5, claude-haiku-4-5-20251001 or gpt-5.4-mini)." },
+    "OPENROUTER_API_KEY": { "default": "", "optional": true, "description": "OpenRouter key, used when PROVIDER=openrouter." },
+    "ANTHROPIC_API_KEY": { "default": "", "optional": true, "description": "Anthropic Console key, used when PROVIDER=anthropic." },
+    "OPENAI_API_KEY": { "default": "", "optional": true, "description": "OpenAI key, used when PROVIDER=openai." },
+    "NOUS_API_KEY": { "default": "", "optional": true, "description": "Nous Portal key, used when PROVIDER=nous. Empty means sign in once with hermes auth add nous over railway ssh." },
+    "API_SERVER_KEY": { "default": "${{secret(64, \"0123456789abcdef\")}}", "optional": false, "description": "Bearer token for the HTTP API. Generated at deploy time." },
+    "API_SERVER_ENABLED": { "default": "true", "optional": false, "description": "Enables the OpenAI-compatible API server and /health." },
+    "API_SERVER_HOST": { "default": "0.0.0.0", "optional": false, "description": "Bind address for the API server inside the container." },
+    "PORT": { "default": "8642", "optional": false, "description": "API server port. Railway routes the public domain and the healthcheck here." },
+    "TELEGRAM_BOT_TOKEN": { "default": "", "optional": true, "description": "Telegram bot token from @BotFather. Leave empty to run without Telegram." },
+    "TELEGRAM_ALLOWED_USERS": { "default": "", "optional": true, "description": "Numeric Telegram user IDs, comma separated. Required when TELEGRAM_BOT_TOKEN is set. The container refuses to start without it." }
+  }
+}
