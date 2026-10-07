@@ -32,7 +32,9 @@ jobs:
       - name: Run smoke test
         env:
           SMOKE_INIT: ${{ matrix.init }}
-        run: ./scripts/smoke.sh 2>&1 | tee smoke-output.txt
+        run: |
+          set -o pipefail
+          ./scripts/smoke.sh 2>&1 | tee smoke-output.txt
       - name: Summary
         if: always()
         run: |

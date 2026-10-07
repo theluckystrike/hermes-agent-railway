@@ -8,7 +8,8 @@
 #   3. the provider preset landed in /opt/data/config.yaml
 #   4. a session created over the API survives `docker restart`
 #   5. the same session survives a fresh container on the same volume (a redeploy)
-#   6. TELEGRAM_BOT_TOKEN without TELEGRAM_ALLOWED_USERS stops the container
+#   6. switching PROVIDER on the same volume rewrites the preset
+#   7. TELEGRAM_BOT_TOKEN without TELEGRAM_ALLOWED_USERS stops the container
 #
 # Env knobs:
 #   IMAGE=<ref>     skip the build and test this image
@@ -59,7 +60,14 @@ template_env=(
 start() {
     docker run -d --name "$NAME" "${INIT_FLAG[@]}" \
         -v "${VOLUME}:/opt/data" -p "127.0.0.1:${HOST_PORT}:8642" \
-        "${template_env[@]}" "$IMAGE" >/dev/null
+        "${template_env[@]}" "$@" "$IMAGE" >/dev/null
+}
+
+# model.default / model.provider / model.base_url from the volume's config.yaml
+model_cfg() {
+    docker exec "$NAME" python3 -c 'import yaml
+m = (yaml.safe_load(open("/opt/data/config.yaml")) or {}).get("model") or {}
+print(m.get("provider", ""), m.get("default", ""), m.get("base_url", "") or "-")' 2>/dev/null || true
 }
 
 code() { curl -s -o /dev/null -w '%{http_code}' "$@" || true; }
@@ -68,7 +76,7 @@ wait_health() {
     local t0=$SECONDS body
     while [ $((SECONDS - t0)) -lt "$BOOT_TIMEOUT" ]; do
         body="$(curl -fsS --max-time 3 "${BASE}/health" 2>/dev/null || true)"
-        if printf '%s' "$body" | grep -q '"ok"'; then
+        if grep -q '"ok"' <<<"$body"; then
             info "healthy after $((SECONDS - t0))s: $body"
             return 0
         fi
@@ -102,12 +110,11 @@ c="$(code "${auth[@]}" "${BASE}/v1/models")"
 [ "$c" = "200" ] && ok "GET /v1/models with the key is 200" || bad "GET /v1/models with the key returned $c"
 
 # ---- 3. preset -------------------------------------------------------------
-cfg="$(docker exec "$NAME" cat /opt/data/config.yaml 2>/dev/null || true)"
-if printf '%s' "$cfg" | grep -Eq "default: ['\"]?anthropic/claude-haiku-4.5" && printf '%s' "$cfg" | grep -Eq "provider: ['\"]?openrouter"; then
-    ok "config.yaml has provider openrouter and model anthropic/claude-haiku-4.5"
+got="$(model_cfg)"
+if [ "$got" = "openrouter anthropic/claude-haiku-4.5 https://openrouter.ai/api/v1" ]; then
+    ok "config.yaml preset is openrouter / anthropic/claude-haiku-4.5"
 else
-    bad "preset missing from config.yaml"
-    printf '%s\n' "$cfg" | grep -nE '^model:|^  (default|provider|base_url):' | sed 's/^/      /'
+    bad "config.yaml preset is '$got'"
 fi
 
 # ---- 4. session survives docker restart -----------------------------------
@@ -131,13 +138,26 @@ docker rm -f "$NAME" >/dev/null
 start
 if wait_health; then ok "fresh container on the same volume is healthy"; else bad "fresh container not healthy"; exit 1; fi
 body="$(curl -s "${auth[@]}" "${BASE}/api/sessions/${sid}")"
-if printf '%s' "$body" | grep -q "smoke-persist"; then
+if grep -q "smoke-persist" <<<"$body"; then
     ok "session $sid and its title survive a redeploy"
 else
     bad "session $sid missing after redeploy: $body"
 fi
 
-# ---- 6. Telegram allowlist guard -------------------------------------------
+# ---- 6. switching the preset on the same volume ----------------------------
+docker rm -f "$NAME" >/dev/null
+start -e PROVIDER=anthropic -e ANTHROPIC_API_KEY=sk-ant-smoke-placeholder
+if wait_health; then ok "container with PROVIDER=anthropic is healthy"; else bad "PROVIDER=anthropic container not healthy"; exit 1; fi
+got="$(model_cfg)"
+if [ "$got" = "anthropic claude-haiku-4-5-20251001 -" ]; then
+    ok "config.yaml preset switched to anthropic / claude-haiku-4-5-20251001"
+else
+    bad "config.yaml after PROVIDER=anthropic is '$got'"
+fi
+c="$(code "${auth[@]}" "${BASE}/api/sessions/${sid}")"
+[ "$c" = "200" ] && ok "session $sid still readable after the preset switch" || bad "session $sid returned $c after the preset switch"
+
+# ---- 7. Telegram allowlist guard -------------------------------------------
 docker run -d --name "${NAME}-tg" "${INIT_FLAG[@]}" \
     "${template_env[@]}" -e TELEGRAM_BOT_TOKEN=123456:smoke-placeholder "$IMAGE" >/dev/null
 t0=$SECONDS
