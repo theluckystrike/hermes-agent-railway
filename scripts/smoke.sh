@@ -164,11 +164,12 @@ t0=$SECONDS
 while [ "$(docker inspect -f '{{.State.Running}}' "${NAME}-tg")" = "true" ] && [ $((SECONDS - t0)) -lt 90 ]; do sleep 1; done
 exit_code="$(docker inspect -f '{{.State.ExitCode}}' "${NAME}-tg")"
 running="$(docker inspect -f '{{.State.Running}}' "${NAME}-tg")"
-if [ "$running" = "false" ] && [ "$exit_code" != "0" ] && docker logs "${NAME}-tg" 2>&1 | grep -q "TELEGRAM_ALLOWED_USERS is empty"; then
+tg_logs="$(docker logs "${NAME}-tg" 2>&1 || true)"
+if [ "$running" = "false" ] && [ "$exit_code" != "0" ] && grep -q "TELEGRAM_ALLOWED_USERS is empty" <<<"$tg_logs"; then
     ok "Telegram token without allowlist stops the container (exit $exit_code)"
 else
     bad "Telegram guard did not stop the container (running=$running exit=$exit_code)"
-    docker logs --tail 20 "${NAME}-tg" 2>&1 | sed 's/^/      /'
+    tail -n 20 <<<"$tg_logs" | sed 's/^/      /'
 fi
 
 printf '\n%d passed, %d failed\n' "$pass" "$fail"
