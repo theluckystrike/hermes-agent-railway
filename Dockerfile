@@ -1,6 +1,6 @@
 # Official Hermes Agent image, pinned by release tag and multi-arch index digest.
 # .github/workflows/bump.yml rewrites this line when Nous Research ships a release.
-FROM nousresearch/hermes-agent:v2026.9.24@sha256:fca358f12efd65bfaaca05884166f15c0e2788375ca30d77061ac1ebc96452b7
+FROM nousresearch/hermes-agent:v0.22.5@sha256:9c5561579f3ffdf333401797094ac3a743738d6c25d40f4331c7bf77b694238d
 
 # The only addition to the official image is the Railway start script (mode 0755 in git).
 # ENTRYPOINT stays untouched, so s6-overlay still bootstraps /opt/data as root
